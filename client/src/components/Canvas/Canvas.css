@@ -1,0 +1,74 @@
+/* Canvas Styles */ 
+.canvas-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.canvas.eraser-cursor {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="black" stroke-width="2"/></svg>') 12 12, auto;
+}
+
+.text-input-overlay {
+  position: absolute;
+  z-index: 100;
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px var(--shadow-lg);
+  border: 2px solid var(--accent);
+}
+
+.text-input-overlay input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 16px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-width: 200px;
+  margin-bottom: 8px;
+}
+
+.text-input-overlay input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.text-input-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.text-input-buttons button {
+  flex: 1;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.text-input-buttons button:first-child {
+  background: var(--accent);
+  color: white;
+}
+
+.text-input-buttons button:last-child {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.text-input-buttons button:hover {
+  transform: scale(1.05);
+}

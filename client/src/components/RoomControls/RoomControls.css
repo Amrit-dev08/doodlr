@@ -1,0 +1,312 @@
+/* Room Controls Styles */ 
+.room-controls {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--toolbar-bg);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 1000;
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room-code-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.room-label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.room-code {
+  color: var(--accent);
+  font-size: 16px;
+  letter-spacing: 1px;
+  font-family: monospace;
+}
+
+.admin-badge {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.room-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+  background: var(--bg-primary);
+  transform: translateY(-2px);
+}
+
+.control-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.control-btn.danger {
+  color: #ef4444;
+}
+
+.control-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.control-btn .badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--accent);
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-secondary);
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.chevron {
+  font-size: 12px;
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px var(--shadow-lg);
+  min-width: 280px;
+  max-width: 320px;
+  overflow: hidden;
+  z-index: 1001;
+}
+
+.dropdown-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dropdown-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.users-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+.user-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.user-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.user-badge {
+  background: var(--accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dropdown-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.share-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.share-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+/* Copied toast */
+.copied-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px var(--shadow-lg);
+  z-index: 10000;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .room-controls {
+    height: 56px;
+    padding: 0 12px;
+  }
+
+  .room-code-badge {
+    padding: 6px 12px;
+  }
+
+  .room-label {
+    display: none;
+  }
+
+  .room-code {
+    font-size: 14px;
+  }
+
+  .control-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .admin-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .dropdown-menu {
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 480px) {
+  .room-actions {
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}

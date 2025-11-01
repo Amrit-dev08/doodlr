@@ -1,4 +1,3 @@
-// Canvas Component
 import React, {
   useRef,
   useEffect,
@@ -19,12 +18,15 @@ import {
 import "./Canvas.css";
 
 const Canvas = forwardRef(
-  ({ tool, color, lineWidth, onDraw, onPointerMove }, ref) => {
+  (
+    { tool, color, lineWidth, onDrawComplete, onDrawPreview, onPointerMove },
+    ref
+  ) => {
     const canvasRef = useRef(null);
+    const previewCanvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-    const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
-    const [tempCanvas, setTempCanvas] = useState(null);
+    const [currentStroke, setCurrentStroke] = useState([]); // For pen/eraser strokes
     const [textInput, setTextInput] = useState({
       show: false,
       x: 0,
@@ -32,47 +34,52 @@ const Canvas = forwardRef(
       value: "",
     });
 
-    // Initialize canvas
+    // Initialize canvases
     useEffect(() => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      const previewCanvas = previewCanvasRef.current;
+      if (!canvas || !previewCanvas) return;
 
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-      // Set canvas size
       const resizeCanvas = () => {
-        const { width, height } = canvas.getBoundingClientRect();
+        const container = canvas.parentElement;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        // Save current canvas content
+        const mainCtx = canvas.getContext("2d");
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.getContext("2d").drawImage(canvas, 0, 0);
+
         canvas.width = width;
         canvas.height = height;
+        previewCanvas.width = width;
+        previewCanvas.height = height;
 
-        // Redraw canvas content after resize
-        if (tempCanvas) {
-          ctx.drawImage(tempCanvas, 0, 0);
-        }
+        // Restore content
+        mainCtx.drawImage(tempCanvas, 0, 0);
       };
 
       resizeCanvas();
       window.addEventListener("resize", resizeCanvas);
+      return () => window.removeEventListener("resize", resizeCanvas);
+    }, []);
 
-      return () => {
-        window.removeEventListener("resize", resizeCanvas);
-      };
-    }, [tempCanvas]);
-
-    // Throttled pointer move for performance
     const throttledPointerMove = useRef(
-      throttle((x, y) => {
-        onPointerMove(x, y);
-      }, 100)
+      throttle((x, y) => onPointerMove(x, y), 100)
     ).current;
 
-    // Expose methods to parent via ref
     useImperativeHandle(ref, () => ({
       clearCanvas: () => {
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const previewCanvas = previewCanvasRef.current;
+        const mainCtx = canvas.getContext("2d");
+        const previewCtx = previewCanvas.getContext("2d");
+        mainCtx.clearRect(0, 0, canvas.width, canvas.height);
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
       },
+
       loadCanvas: (drawDataArray) => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
@@ -82,17 +89,25 @@ const Canvas = forwardRef(
           executeDrawing(ctx, data);
         });
       },
-      drawRemote: (drawData) => {
+
+      drawRemoteComplete: (drawData) => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         executeDrawing(ctx, drawData);
       },
+
+      drawRemotePreview: (drawData) => {
+        const previewCanvas = previewCanvasRef.current;
+        const ctx = previewCanvas.getContext("2d");
+        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        executeDrawing(ctx, drawData);
+      },
     }));
 
-    // Execute drawing based on draw data
     const executeDrawing = (ctx, data) => {
       const {
         tool: drawTool,
+        points,
         x1,
         y1,
         x2,
@@ -104,7 +119,18 @@ const Canvas = forwardRef(
 
       switch (drawTool) {
         case "pen":
-          drawLine(ctx, x1, y1, x2, y2, drawColor, drawLineWidth);
+          if (points && points.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+              ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.strokeStyle = drawColor;
+            ctx.lineWidth = drawLineWidth;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke();
+          }
           break;
         case "line":
           drawLine(ctx, x1, y1, x2, y2, drawColor, drawLineWidth);
@@ -122,17 +148,23 @@ const Canvas = forwardRef(
           drawText(ctx, text, x1, y1, drawColor, 24);
           break;
         case "eraser":
-          erase(ctx, x2, y2, drawLineWidth * 2);
+          if (points && points.length > 0) {
+            ctx.globalCompositeOperation = "destination-out";
+            points.forEach((point) => {
+              ctx.beginPath();
+              ctx.arc(point.x, point.y, drawLineWidth, 0, 2 * Math.PI);
+              ctx.fill();
+            });
+            ctx.globalCompositeOperation = "source-over";
+          }
           break;
         default:
           break;
       }
     };
 
-    // Start drawing
     const startDrawing = (e) => {
       e.preventDefault();
-
       const canvas = canvasRef.current;
       const coords = getCoordinates(canvas, e);
 
@@ -143,46 +175,42 @@ const Canvas = forwardRef(
 
       setIsDrawing(true);
       setStartPos(coords);
-      setCurrentPos(coords);
-
-      // Save current canvas state for shapes
-      if (["line", "circle", "rectangle", "arrow"].includes(tool)) {
-        const ctx = canvas.getContext("2d");
-        setTempCanvas(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      }
+      setCurrentStroke([coords]);
     };
 
-    // Continue drawing
     const draw = (e) => {
       e.preventDefault();
+      const canvas = canvasRef.current;
+      const coords = getCoordinates(canvas, e);
 
       if (!isDrawing) {
-        // Just track pointer for other users
-        const canvas = canvasRef.current;
-        const coords = getCoordinates(canvas, e);
         throttledPointerMove(coords.x, coords.y);
         return;
       }
 
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      const coords = getCoordinates(canvas, e);
-
-      setCurrentPos(coords);
+      const previewCanvas = previewCanvasRef.current;
+      const previewCtx = previewCanvas.getContext("2d");
 
       if (tool === "pen") {
-        // Free drawing
+        const mainCtx = canvas.getContext("2d");
         drawLine(
-          ctx,
-          startPos.x,
-          startPos.y,
+          mainCtx,
+          currentStroke[currentStroke.length - 1].x,
+          currentStroke[currentStroke.length - 1].y,
           coords.x,
           coords.y,
           color,
           lineWidth
         );
+        setCurrentStroke((prev) => [...prev, coords]);
+      } else if (tool === "eraser") {
+        const mainCtx = canvas.getContext("2d");
+        erase(mainCtx, coords.x, coords.y, lineWidth * 2);
+        setCurrentStroke((prev) => [...prev, coords]);
+      } else if (["line", "circle", "rectangle", "arrow"].includes(tool)) {
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
-        const drawData = {
+        const previewData = {
           tool,
           x1: startPos.x,
           y1: startPos.y,
@@ -192,81 +220,13 @@ const Canvas = forwardRef(
           lineWidth,
         };
 
-        onDraw(drawData);
-        setStartPos(coords);
-      } else if (tool === "eraser") {
-        // Eraser
-        erase(ctx, coords.x, coords.y, lineWidth * 2);
-
-        const drawData = {
-          tool,
-          x1: startPos.x,
-          y1: startPos.y,
-          x2: coords.x,
-          y2: coords.y,
-          lineWidth,
-        };
-
-        onDraw(drawData);
-        setStartPos(coords);
-      } else if (["line", "circle", "rectangle", "arrow"].includes(tool)) {
-        // Shapes - show preview
-        ctx.putImageData(tempCanvas, 0, 0);
-
-        switch (tool) {
-          case "line":
-            drawLine(
-              ctx,
-              startPos.x,
-              startPos.y,
-              coords.x,
-              coords.y,
-              color,
-              lineWidth
-            );
-            break;
-          case "circle":
-            drawCircle(
-              ctx,
-              startPos.x,
-              startPos.y,
-              coords.x,
-              coords.y,
-              color,
-              lineWidth
-            );
-            break;
-          case "rectangle":
-            drawRectangle(
-              ctx,
-              startPos.x,
-              startPos.y,
-              coords.x,
-              coords.y,
-              color,
-              lineWidth
-            );
-            break;
-          case "arrow":
-            drawArrow(
-              ctx,
-              startPos.x,
-              startPos.y,
-              coords.x,
-              coords.y,
-              color,
-              lineWidth
-            );
-            break;
-          default:
-            break;
-        }
+        executeDrawing(previewCtx, previewData);
+        onDrawPreview(previewData);
       }
 
       throttledPointerMove(coords.x, coords.y);
     };
 
-    // Stop drawing
     const stopDrawing = (e) => {
       if (!isDrawing) return;
 
@@ -275,9 +235,27 @@ const Canvas = forwardRef(
 
       const canvas = canvasRef.current;
       const coords = getCoordinates(canvas, e);
+      const previewCanvas = previewCanvasRef.current;
+      const previewCtx = previewCanvas.getContext("2d");
+      previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
-      if (["line", "circle", "rectangle", "arrow"].includes(tool)) {
-        const drawData = {
+      let drawData;
+
+      if (tool === "pen") {
+        drawData = {
+          tool: "pen",
+          points: currentStroke,
+          color,
+          lineWidth,
+        };
+      } else if (tool === "eraser") {
+        drawData = {
+          tool: "eraser",
+          points: currentStroke,
+          lineWidth: lineWidth * 2,
+        };
+      } else if (["line", "circle", "rectangle", "arrow"].includes(tool)) {
+        drawData = {
           tool,
           x1: startPos.x,
           y1: startPos.y,
@@ -287,11 +265,17 @@ const Canvas = forwardRef(
           lineWidth,
         };
 
-        onDraw(drawData);
+        const mainCtx = canvas.getContext("2d");
+        executeDrawing(mainCtx, drawData);
       }
+
+      if (drawData) {
+        onDrawComplete(drawData);
+      }
+
+      setCurrentStroke([]);
     };
 
-    // Handle text input
     const handleTextSubmit = () => {
       if (!textInput.value.trim()) {
         setTextInput({ show: false, x: 0, y: 0, value: "" });
@@ -301,8 +285,6 @@ const Canvas = forwardRef(
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
 
-      drawText(ctx, textInput.value, textInput.x, textInput.y, color, 24);
-
       const drawData = {
         tool: "text",
         x1: textInput.x,
@@ -311,7 +293,8 @@ const Canvas = forwardRef(
         color,
       };
 
-      onDraw(drawData);
+      executeDrawing(ctx, drawData);
+      onDrawComplete(drawData);
       setTextInput({ show: false, x: 0, y: 0, value: "" });
     };
 
@@ -319,7 +302,15 @@ const Canvas = forwardRef(
       <div className="canvas-container">
         <canvas
           ref={canvasRef}
-          className={`canvas ${tool === "eraser" ? "eraser-cursor" : ""}`}
+          className={`canvas main-canvas ${
+            tool === "eraser" ? "eraser-cursor" : ""
+          }`}
+        />
+        <canvas
+          ref={previewCanvasRef}
+          className={`canvas preview-canvas ${
+            tool === "eraser" ? "eraser-cursor" : ""
+          }`}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -363,5 +354,4 @@ const Canvas = forwardRef(
 );
 
 Canvas.displayName = "Canvas";
-
 export default Canvas;

@@ -1,4 +1,3 @@
-// Room Page
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,6 +18,7 @@ function Room() {
   const [username] = useState(location.state?.username || "Guest");
   const [isAdmin, setIsAdmin] = useState(false);
   const [users, setUsers] = useState([]);
+  const [userCount, setUserCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tool, setTool] = useState("pen");
   const [color, setColor] = useState("#000000");
@@ -26,64 +26,88 @@ function Room() {
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [userPointers, setUserPointers] = useState({});
+  const [notification, setNotification] = useState(null);
 
   const canvasRef = useRef(null);
+  const mySocketIdRef = useRef(null);
+
+  // Show notification helper
+  const showNotification = (message, type = "info") => {
+    setNotification({ message, type, id: Date.now() });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   useEffect(() => {
     if (!socket || !connected) return;
 
-    // Join room on mount
+    mySocketIdRef.current = socket.id;
     socket.emit("join-room", { roomId, username });
 
-    // Room joined successfully
-    socket.on("room-joined", ({ admin, users: roomUsers, canvas }) => {
-      setIsAdmin(socket.id === admin);
-      setUsers(roomUsers);
+    const handlers = {
+      "room-joined": ({
+        admin,
+        users: roomUsers,
+        canvas,
+        userCount: count,
+      }) => {
+        setIsAdmin(socket.id === admin);
+        setUsers(roomUsers);
+        setUserCount(count);
 
-      // Load existing canvas
-      if (canvas && canvasRef.current) {
-        canvasRef.current.loadCanvas(canvas);
-      }
-    });
+        if (canvas && canvasRef.current) {
+          canvasRef.current.loadCanvas(canvas);
+        }
+      },
 
-    // User joined
-    socket.on("user-joined", ({ users: updatedUsers }) => {
-      setUsers(updatedUsers);
-    });
+      "user-joined": ({ user, users: updatedUsers, userCount: count }) => {
+        setUsers(updatedUsers);
+        setUserCount(count);
+        if (user.socketId !== socket.id) {
+          showNotification(`${user.username} joined`, "success");
+        }
+      },
 
-    // User left
-    socket.on("user-left", ({ users: updatedUsers, newAdmin }) => {
-      setUsers(updatedUsers);
-      if (newAdmin === socket.id) {
-        setIsAdmin(true);
-      }
-    });
+      "user-left": ({ users: updatedUsers, newAdmin, userCount: count }) => {
+        setUsers(updatedUsers);
+        setUserCount(count);
+        if (newAdmin === socket.id) {
+          setIsAdmin(true);
+          showNotification("You are now the admin", "info");
+        }
+      },
 
-    // Drawing events
-    socket.on("draw", ({ drawData }) => {
-      if (canvasRef.current) {
-        canvasRef.current.drawRemote(drawData);
-      }
-    });
+      "draw-complete": ({ drawData }) => {
+        if (canvasRef.current) {
+          canvasRef.current.drawRemoteComplete(drawData);
+        }
+      },
 
-    // Canvas cleared
-    socket.on("canvas-cleared", () => {
-      if (canvasRef.current) {
-        canvasRef.current.clearCanvas();
-      }
-    });
+      "draw-preview": ({ drawData }) => {
+        if (canvasRef.current) {
+          canvasRef.current.drawRemotePreview(drawData);
+        }
+      },
 
-    // Canvas update (undo/redo)
-    socket.on("canvas-update", ({ canvas }) => {
-      if (canvasRef.current) {
-        canvasRef.current.loadCanvas(canvas);
-      }
-    });
+      "canvas-cleared": () => {
+        if (canvasRef.current) {
+          canvasRef.current.clearCanvas();
+        }
+        showNotification("Canvas cleared", "info");
+      },
 
-    // Pointer tracking
-    socket.on(
-      "pointer-move",
-      ({ socketId, username: userName, color: userColor, x, y }) => {
+      "canvas-update": ({ canvas }) => {
+        if (canvasRef.current) {
+          canvasRef.current.loadCanvas(canvas);
+        }
+      },
+
+      "pointer-move": ({
+        socketId,
+        username: userName,
+        color: userColor,
+        x,
+        y,
+      }) => {
         setUserPointers((prev) => ({
           ...prev,
           [socketId]: {
@@ -94,44 +118,40 @@ function Room() {
             timestamp: Date.now(),
           },
         }));
-      }
-    );
+      },
 
-    // Chat messages
-    socket.on("chat-message", (message) => {
-      setMessages((prev) => [...prev, message]);
-    });
+      "chat-message": (message) => {
+        setMessages((prev) => [...prev, message]);
+        if (message.socketId !== socket.id && !sidebarOpen) {
+          showNotification(
+            `${message.username}: ${message.message.substring(0, 30)}${
+              message.message.length > 30 ? "..." : ""
+            }`,
+            "message"
+          );
+        }
+      },
 
-    // Chat reactions
-    socket.on("chat-reaction", (reaction) => {
-      setReactions((prev) => [...prev, { ...reaction, id: Date.now() }]);
-      setTimeout(() => {
-        setReactions((prev) => prev.filter((r) => r.id !== reaction.id));
-      }, 3000);
-    });
+      "chat-reaction": (reaction) => {
+        setReactions((prev) => [...prev, { ...reaction, id: Date.now() }]);
+        setTimeout(() => {
+          setReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+        }, 3000);
+      },
 
-    // Room error
-    socket.on("room-error", ({ message }) => {
-      alert(message);
-      navigate("/");
-    });
-
-    // Cleanup
-    return () => {
-      socket.off("room-joined");
-      socket.off("user-joined");
-      socket.off("user-left");
-      socket.off("draw");
-      socket.off("canvas-cleared");
-      socket.off("canvas-update");
-      socket.off("pointer-move");
-      socket.off("chat-message");
-      socket.off("chat-reaction");
-      socket.off("room-error");
+      "room-error": ({ message }) => {
+        alert(message);
+        navigate("/");
+      },
     };
-  }, [socket, connected, roomId, username, navigate]);
 
-  // Clean up old pointers
+    Object.entries(handlers).forEach(([evt, fn]) => socket.on(evt, fn));
+
+    return () => {
+      Object.entries(handlers).forEach(([evt]) => socket.off(evt));
+    };
+  }, [socket, connected, roomId, username, navigate, sidebarOpen]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -149,9 +169,15 @@ function Room() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleDraw = (drawData) => {
+  const handleDrawComplete = (drawData) => {
     if (socket && connected) {
-      socket.emit("draw", { roomId, drawData });
+      socket.emit("draw-complete", { roomId, drawData });
+    }
+  };
+
+  const handleDrawPreview = (drawData) => {
+    if (socket && connected) {
+      socket.emit("draw-preview", { roomId, drawData });
     }
   };
 
@@ -163,7 +189,9 @@ function Room() {
 
   const handleClearCanvas = () => {
     if (socket && connected && isAdmin) {
-      socket.emit("clear-canvas", { roomId });
+      if (confirm("Clear the entire canvas? This cannot be undone.")) {
+        socket.emit("clear-canvas", { roomId });
+      }
     }
   };
 
@@ -195,6 +223,7 @@ function Room() {
     return (
       <div className="loading">
         <div className="spinner" />
+        <p>Connecting to server...</p>
       </div>
     );
   }
@@ -204,6 +233,7 @@ function Room() {
       <RoomControls
         roomId={roomId}
         users={users}
+        userCount={userCount}
         isAdmin={isAdmin}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
@@ -215,7 +245,8 @@ function Room() {
           tool={tool}
           color={color}
           lineWidth={lineWidth}
-          onDraw={handleDraw}
+          onDrawComplete={handleDrawComplete}
+          onDrawPreview={handleDrawPreview}
           onPointerMove={handlePointerMove}
         />
 
@@ -239,6 +270,20 @@ function Room() {
             </motion.div>
           ))}
         </AnimatePresence>
+
+        <AnimatePresence>
+          {notification && (
+            <motion.div
+              className={`notification notification-${notification.type}`}
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              transition={{ duration: 0.3 }}
+            >
+              {notification.message}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Toolbar
@@ -260,6 +305,7 @@ function Room() {
         messages={messages}
         onSendMessage={handleSendMessage}
         onSendReaction={handleSendReaction}
+        mySocketId={mySocketIdRef.current}
       />
     </div>
   );

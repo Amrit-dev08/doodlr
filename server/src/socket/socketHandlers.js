@@ -1,20 +1,13 @@
-// Socket Handlers
 import roomManager from "./roomManager.js";
 import {
   generateRoomCode,
   isValidRoomCode,
 } from "../utils/roomCodeGenerator.js";
 
-/**
- * Setup all Socket.io event handlers
- */
 export function setupSocketHandlers(io) {
   io.on("connection", (socket) => {
     console.log(`✅ User connected: ${socket.id}`);
 
-    /**
-     * Create a new room
-     */
     socket.on("create-room", ({ username }) => {
       const roomId = generateRoomCode();
       const room = roomManager.createRoom(roomId, socket.id, username);
@@ -24,14 +17,12 @@ export function setupSocketHandlers(io) {
         roomId,
         admin: socket.id,
         users: room.users,
+        userCount: room.users.length,
       });
 
       console.log(`🏠 Room created: ${roomId} by ${username}`);
     });
 
-    /**
-     * Join existing room
-     */
     socket.on("join-room", ({ roomId, username }) => {
       if (!isValidRoomCode(roomId)) {
         socket.emit("room-error", { message: "Invalid room code format" });
@@ -46,36 +37,37 @@ export function setupSocketHandlers(io) {
       const room = roomManager.joinRoom(roomId, socket.id, username);
       socket.join(roomId);
 
-      // Send current canvas state to new user
       socket.emit("room-joined", {
         roomId,
         admin: room.admin,
         users: room.users,
         canvas: room.canvas,
+        userCount: room.users.length,
       });
 
-      // Notify others in room
       socket.to(roomId).emit("user-joined", {
         user: roomManager.getUserInfo(roomId, socket.id),
         users: room.users,
+        userCount: room.users.length,
       });
 
-      console.log(`👥 ${username} joined room: ${roomId}`);
+      console.log(
+        `👥 ${username} joined room: ${roomId}. Total users: ${room.users.length}`
+      );
     });
 
     /**
-     * Drawing events
+     * FIXED: Drawing events - each complete stroke/shape is one unit
      */
-    socket.on("draw", ({ roomId, drawData }) => {
-      roomManager.updateCanvas(roomId, drawData);
-
-      // Broadcast to all users in room except sender
-      socket.to(roomId).emit("draw", { drawData });
+    socket.on("draw-complete", ({ roomId, drawData }) => {
+      roomManager.addToCanvas(roomId, drawData);
+      socket.to(roomId).emit("draw-complete", { drawData });
     });
 
-    /**
-     * Mouse/Touch pointer tracking
-     */
+    socket.on("draw-preview", ({ roomId, drawData }) => {
+      socket.to(roomId).emit("draw-preview", { drawData });
+    });
+
     socket.on("pointer-move", ({ roomId, x, y }) => {
       const user = roomManager.getUserInfo(roomId, socket.id);
       if (!user) return;
@@ -89,9 +81,6 @@ export function setupSocketHandlers(io) {
       });
     });
 
-    /**
-     * Clear canvas (admin only)
-     */
     socket.on("clear-canvas", ({ roomId }) => {
       const room = roomManager.getRoom(roomId);
       if (!room || room.admin !== socket.id) {
@@ -104,35 +93,27 @@ export function setupSocketHandlers(io) {
       console.log(`🗑️  Canvas cleared in room: ${roomId}`);
     });
 
-    /**
-     * Undo action
-     */
     socket.on("undo", ({ roomId }) => {
-      const canvas = roomManager.undo(roomId);
-      if (canvas !== null) {
-        io.to(roomId).emit("canvas-update", { canvas });
+      const result = roomManager.undo(roomId);
+      if (result) {
+        io.to(roomId).emit("canvas-update", result);
       }
     });
 
-    /**
-     * Redo action
-     */
     socket.on("redo", ({ roomId }) => {
-      const canvas = roomManager.redo(roomId);
-      if (canvas !== null) {
-        io.to(roomId).emit("canvas-update", { canvas });
+      const result = roomManager.redo(roomId);
+      if (result) {
+        io.to(roomId).emit("canvas-update", result);
       }
     });
 
-    /**
-     * Chat message
-     */
     socket.on("chat-message", ({ roomId, message }) => {
       const user = roomManager.getUserInfo(roomId, socket.id);
       if (!user) return;
 
       const chatData = {
         id: Date.now(),
+        socketId: socket.id,
         username: user.username,
         message,
         timestamp: new Date().toISOString(),
@@ -142,9 +123,6 @@ export function setupSocketHandlers(io) {
       io.to(roomId).emit("chat-message", chatData);
     });
 
-    /**
-     * Chat reaction
-     */
     socket.on("chat-reaction", ({ roomId, emoji }) => {
       const user = roomManager.getUserInfo(roomId, socket.id);
       if (!user) return;
@@ -156,11 +134,7 @@ export function setupSocketHandlers(io) {
       });
     });
 
-    /**
-     * Disconnect
-     */
     socket.on("disconnect", () => {
-      // Find and leave all rooms
       const rooms = Array.from(socket.rooms);
       rooms.forEach((roomId) => {
         if (roomId !== socket.id) {
@@ -171,6 +145,7 @@ export function setupSocketHandlers(io) {
               socketId: socket.id,
               users: result.users,
               newAdmin: result.admin,
+              userCount: result.users.length,
             });
           }
         }

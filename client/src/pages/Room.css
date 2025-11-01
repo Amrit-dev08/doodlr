@@ -1,4 +1,3 @@
-/* Room Styles */
 .room {
   width: 100vw;
   height: 100vh;
@@ -11,6 +10,8 @@
   width: 100%;
   height: 100%;
   position: relative;
+  padding-top: 64px;
+  padding-bottom: 80px;
 }
 
 .floating-reaction {
@@ -20,9 +21,52 @@
   user-select: none;
 }
 
+/* Notification Toast */
+.notification {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px var(--shadow-lg);
+  z-index: 10000;
+  max-width: 90%;
+  text-align: center;
+}
+
+.notification-info {
+  background: var(--accent);
+  color: white;
+}
+
+.notification-success {
+  background: #10b981;
+  color: white;
+}
+
+.notification-message {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--accent);
+}
+
 /* Mobile optimization */
 @media (max-width: 768px) {
   .room {
     touch-action: none;
+  }
+
+  .room-content {
+    padding-top: 56px;
+    padding-bottom: 100px;
+  }
+
+  .notification {
+    top: 70px;
+    font-size: 12px;
+    padding: 10px 16px;
   }
 }
